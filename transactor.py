@@ -346,15 +346,26 @@ class request_clerk():
         self._responses[uuid] = data
 
 # arbiter stub
-    def do_serve_request(self, func=lambda k: k["dbname"]):
-        md, iat = self.impl_pop_request()
-        req, nice = md
+
+    def impl_do_serve_request(self, req, iat, func):
         uuid = req["uuid"]
         time.sleep(0)
         # do something with req
         res = func(req)
         self.impl_set_response(uuid, res)
         self.impl_set_descr( {"uuid": uuid, "status": 200, "time": iat} )
+
+    def do_serve_request(self, func=lambda k: k["dbname"], spin=False):
+        md, iat = self.impl_pop_request()
+        req, nice = md
+        if req is None:
+            if not spin:
+                return None
+            while req is None:
+                time.sleep(0)
+                md, iat = self.impl_pop_request()
+                req, nice = md
+        self.impl_do_serve_request(req, iat, func)
 
 
 class write_clerk(request_clerk):

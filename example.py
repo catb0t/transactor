@@ -19,8 +19,9 @@ def client(key):
 
 def server(key):
     while True:
-        R.do_serve_request()
+        R.do_serve_request(spin=True)
         print(R.get_status(key))
+        print(R.get_response(key))
         time.sleep(0)
 
 
@@ -30,6 +31,6 @@ if __name__ == '__main__':
     c1 = lambda: client(key)
     s = threading.Thread(target=s1)
     c = threading.Thread(target=c1)
-    c.start()
-    time.sleep(0)
     s.start()
+    # time.sleep(0)
+    c.start()
