@@ -1,0 +1,40 @@
+
+def _static_vars(**kwargs):
+    def decorate(func):
+        for k in kwargs:
+            setattr(func, k, kwargs[k])
+        return func
+    return decorate
+
+
+@_static_vars(index=0)
+def keyfun_r(keysize, alpha=__import__("string").ascii_lowercase):
+    '''simple reentrant predictable key generator'''
+    if not keysize:
+        keyfun_r.index = 0
+        return
+
+    if keyfun_r.index + keysize >= len(alpha):
+        slc = alpha[keyfun_r.index:]
+        keyfun_r.index = 0
+    else:
+        slc = alpha[keyfun_r.index : keyfun_r.index + keysize]
+        keyfun_r.index += keysize
+
+    return slc
+
+
+class hashable_dict(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __hash__(self):
+        keys = list(self.keys())
+        vals = list(self.values())
+        hashes = ()
+        for i in range(len(keys)):
+            hashes += ( ( hash(keys[i]), hash(vals[i]) ), )
+
+        hashstr = "".join( ["".join([str(n) for n in p]) for p in hashes] )
+        return hash(hashstr)
+

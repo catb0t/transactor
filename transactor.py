@@ -43,48 +43,8 @@ def random_key(keysize=64):
     return hexlify(urandom(keysize // 2)).decode("ascii")
 
 
-def _static_vars(**kwargs):
-    def decorate(func):
-        for k in kwargs:
-            setattr(func, k, kwargs[k])
-        return func
-    return decorate
-
-
 def get_maxlen(params, key):
     return params.get(key, DEFAULT_MAXLENS[key])
-
-
-@_static_vars(index=0)
-def keyfun_r(keysize, alpha=__import__("string").ascii_lowercase):
-    '''simple reentrant predictable key generator'''
-    if not keysize:
-        keyfun_r.index = 0
-        return
-
-    if keyfun_r.index + keysize >= len(alpha):
-        slc = alpha[keyfun_r.index:]
-        keyfun_r.index = 0
-    else:
-        slc = alpha[keyfun_r.index : keyfun_r.index + keysize]
-        keyfun_r.index += keysize
-
-    return slc
-
-
-class hashable_dict(dict):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def __hash__(self):
-        keys = list(self.keys())
-        vals = list(self.values())
-        hashes = ()
-        for i in range(len(keys)):
-            hashes += ( ( hash(keys[i]), hash(vals[i]) ), )
-
-        hashstr = "".join( ["".join([str(n) for n in p]) for p in hashes] )
-        return hash(hashstr)
 
 
 class priority_deque():
@@ -95,6 +55,10 @@ class priority_deque():
     @staticmethod
     def default_nice_sorter(nices):
         return sorted(nices, key=lambda x: x.value, reverse=True)
+
+    def random_nice_sorter(nices):
+        import random
+        return random.shuffle(nices, len(nices))
 
     def __init__(self, *args, **kwargs):
         '''
@@ -107,6 +71,7 @@ class priority_deque():
 
             Create an empty priority deque.
         '''
+        import threading
         from collections import deque
         self.prty = priority
         if "priority_enum" in kwargs:
@@ -123,6 +88,7 @@ class priority_deque():
             self.prty.airmail:
                 deque(maxlen=get_maxlen(kwargs, self.prty.airmail))
         }
+        self.lock = threading.Lock()
 
     def push(
         self, obj, nice=None, force=False,
@@ -154,21 +120,24 @@ class priority_deque():
         if nice is None:
             nice = self.prty.normal
         if force or self._can_push(nice):
-            return push_func(self._pool[nice], obj), nice
+            time.sleep(0)
+            with self.lock:
+                return push_func(self._pool[nice], obj), nice
 
         # start from the highest priority and go down
-        while not self._can_push(nice) and (nice >= self.prty.undef):
+        nices = range(nice, priority.min()[0])
+        for nice in nices:
             time.sleep(0)
-            nice -= 1
-        return push_func(self._pool[nice], obj), nice
+            if self._can_push(nice):
+                with self.lock:
+                    return push_func(self._pool[nice], obj), nice
 
     def pop(
-        self, random=False, force_nice=(False, None),
+        self, force_nice=(False, None),
         nice_sorter=None, pop_func=lambda q: q.pop()
     ):
         '''
-            params: random ** (a no-op bool; default: False)
-                    force_nice ** (a pair<bool, priority>;
+            params: force_nice ** (a pair<bool, priority>;
                         default: (Force, None))
                     nice_sorter ** (a function n -> s;
                         default: priority_deque.default_nice_sorter)
@@ -189,28 +158,30 @@ class priority_deque():
                 empty deque is popped from with pop_func.
             To look for lower priorities first, use a function which does not
                 reverse-sort the priority list.
+            To use a random priority, use self.random_nice_sorter
             To pop from a specific priority, use force_nice=(True, nice).
             This will return an object or None (if the priority was empty) and
                 the provided priority.
         '''
-        # if random:
-        #     import random
-        #     return self._sort_pool( lambda x: random.sample(x, len(x)) )
         if nice_sorter is None:
             nice_sorter = self.default_nice_sorter
         if force_nice[0]:
-            return pop_func(self._pool[ force_nice[1] ]), force_nice[1]
+            time.sleep(0)
+            with self.lock:
+                return pop_func(self._pool[ force_nice[1] ]), force_nice[1]
 
         nices = self._sort_pool(nice_sorter)
         for nice in nices:
+            time.sleep(0)
             dq = self._pool[nice]
             if len(dq):
-                return pop_func(dq), nice
+                with self.lock:
+                    return pop_func(dq), nice
         return None, None
 
     def peek(
         self, force_nice=(False, None),
-        nice_sorter=None, peek_func=lambda q: q[len(q) - 1]
+        nice_sorter=None, peek_func=lambda q: q[-1]
     ):
         '''
             params: force_nice ** (a pair<bool, priority>;
@@ -218,18 +189,33 @@ class priority_deque():
                     nice_sorter ** (a function n -> s;
                         default: priority_deque.default_nice_sorter)
                     pop_func ** (a function q -> o;
-                        default: lambda q: q[len(q) - 1])
+                        default: lambda q: q[-1])
             retval: obj (an object)
                     nice (a priority; the priority obj has)
             raises: KeyError if force_nice isn't long enough
                     KeyError if force_nice[1] is not a key in self.prty
             purity: relative
+
+            View an entry in the pool.
         '''
         if nice_sorter is None:
             nice_sorter = self.default_nice_sorter
         if force_nice[0]:
-            return peek_func(self._pool[ force_nice[1] ]), force_nice[1]
+            with self.lock:
+                return peek_func(self._pool[ force_nice[1] ]), force_nice[1]
         return self.pop(nice_sorter=nice_sorter, pop_func=peek_func)
+
+    def clear1(self, nice):
+        dq = self._pool[nice].copy()
+        with self.lock:
+            self._pool[nice].clear()
+        return dq
+
+    def clear(self):
+        pool = self._pool.copy()
+        for nice in self.prty:
+            self._pool[nice].clear()
+        return pool
 
     def _sort_pool(self, nice_sorter=default_nice_sorter):
         return nice_sorter( self.prty )
@@ -244,20 +230,24 @@ class priority_deque():
 
 
 class request_clerk():
+    '''
+        Base class for request pool management objects.
+    '''
 
     def __init__(self, *args, **kwargs):
         '''
-            Base class for request pool management objects.
+            Create a new request pool manager.
         '''
+        import threading
         # read and write request pool
-        self._requests  = priority_deque()
+        self._requests    = priority_deque()
         # impl detail, temp record of recent uuids
         self._known_uuids = set()
         # used only by read subclass; dict: uuid -> data
-        self._responses = dict()
+        self._responses   = dict()
         # descriptions; dict: uuid -> rank, ok?, completed time
-        self._descrs    = dict()
-
+        self._descrs      = dict()
+        self.lock         = threading.Lock()
 # "public" API
 
 # pre-work (introduction)
@@ -276,8 +266,9 @@ class request_clerk():
         '''
         req  = prefunc(req)
         nice = priority(req.get("nice", priority.undef))
-        self._known_uuids.add( req["uuid"] )
-        return self._requests.push(req, nice=nice)
+        with self.lock:
+            self._known_uuids.add( req["uuid"] )
+            return self._requests.push(req, nice=nice)
 
 # post-work (epilogue)
 
@@ -286,7 +277,8 @@ class request_clerk():
 
         if res is None:
             return None
-        del self._descrs[uuid]
+        with self.lock:
+            del self._descrs[uuid]
         return res
 
     def impl_get_descr(self, uuid, spin=False):
@@ -308,7 +300,8 @@ class request_clerk():
 
         if resp is None:
             return None
-        del self._responses[uuid]
+        with self.lock:
+            del self._responses[uuid]
         return resp
 
     def impl_get_response(self, uuid, spin=False):
@@ -337,13 +330,18 @@ class request_clerk():
         # top (right side) of the deque
         return self._requests.pop(), microtime()
 
+    def have_waiting(self):
+        return self._requests.peek()
+
 # arbiter epilogue
 
     def impl_set_descr(self, descr):
-        self._descrs[ descr["uuid"] ] = descr
+        with self.lock:
+            self._descrs[ descr["uuid"] ] = descr
 
     def impl_set_response(self, uuid, data):
-        self._responses[uuid] = data
+        with self.lock:
+            self._responses[uuid] = data
 
 # arbiter stub
 

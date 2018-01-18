@@ -8,21 +8,24 @@ R = transactor.read_clerk()
 
 
 def client(key):
-    while True:
+    for i in range(10):
+        time.sleep(0)
         R.register_read({
           "uuid": key,
           "nice": transactor.priority.normal,
           "dbname": "users"
         })
-        time.sleep(0)
 
 
 def server(key):
-    while True:
+    i = 0
+    while i < 10 or R.impl_have_waiting()[0]:
+        time.sleep(0)
         R.do_serve_request(spin=True)
         print(R.get_status(key))
         print(R.get_response(key))
-        time.sleep(0)
+        print(R.impl_have_waiting())
+        i += 1
 
 
 if __name__ == '__main__':
@@ -31,6 +34,5 @@ if __name__ == '__main__':
     c1 = lambda: client(key)
     s = threading.Thread(target=s1)
     c = threading.Thread(target=c1)
-    s.start()
-    # time.sleep(0)
     c.start()
+    s.start()
