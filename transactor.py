@@ -1,14 +1,27 @@
-from collections import deque
 import enum
 import time
 
 
+@enum.unique
 class priority(enum.IntEnum):
-    undef  = 0
-    low    = 1
-    normal = 2
-    high   = 3
-    airmail = 4
+    undef, low, normal, high, airmail = range(-1, 4)
+
+    def describe(self):
+        return self.value, self.name
+
+    @classmethod
+    def min(cls):
+        return min(
+            [e.describe() for e in list(cls)],
+            key=lambda x: x[0]
+        )
+
+    @classmethod
+    def max(cls):
+        return max(
+            [e.describe() for e in list(cls)],
+            key=lambda x: x[0]
+        )
 
 
 DEFAULT_MAXLENS = {
@@ -74,65 +87,121 @@ class hashable_dict(dict):
         return hash(hashstr)
 
 
-class deque_pool():
+class priority_deque():
+    '''
+        Base class for priority deque objects.
+    '''
+
     @staticmethod
     def default_nice_sorter(nices):
         return sorted(nices, key=lambda x: x.value, reverse=True)
 
     def __init__(self, *args, **kwargs):
-        self.pool = {
-            priority.undef:
-                deque(maxlen=get_maxlen(kwargs, priority.undef)),
-            priority.low:
-                deque(maxlen=get_maxlen(kwargs, priority.low)),
-            priority.normal:
-                deque(maxlen=get_maxlen(kwargs, priority.normal)),
-            priority.high:
-                deque(maxlen=get_maxlen(kwargs, priority.high)),
-            priority.airmail:
-                deque(maxlen=get_maxlen(kwargs, priority.airmail))
+        '''
+            params: priority_enum ** (an alternative enum class with the same
+                        member names as the priority class)
+            retval: a blank priority_deque
+            raises: AttributeError if priority_enum has an unexpected set
+                        of names
+            purity: yes
+
+            Create an empty priority deque.
+        '''
+        from collections import deque
+        self.prty = priority
+        if "priority_enum" in kwargs:
+            self.prty = kwargs["priority_enum"]
+        self._pool = {
+            self.prty.undef:
+                deque(maxlen=get_maxlen(kwargs, self.prty.undef)),
+            self.prty.low:
+                deque(maxlen=get_maxlen(kwargs, self.prty.low)),
+            self.prty.normal:
+                deque(maxlen=get_maxlen(kwargs, self.prty.normal)),
+            self.prty.high:
+                deque(maxlen=get_maxlen(kwargs, self.prty.high)),
+            self.prty.airmail:
+                deque(maxlen=get_maxlen(kwargs, self.prty.airmail))
         }
 
     def push(
-        self, obj,
-        nice=priority.normal,
-        push_func=lambda q, o: q.appendleft(o)
+        self, obj, nice=None, force=False,
+        push_func=lambda q, o: q.appendleft(o),
     ):
-        if self._can_push(nice):
-            push_func(self.pool[nice], obj)
-            return nice
+        '''
+            params: obj (an object)
+                    nice ** (a priority; default: self.prty.normal)
+                    force ** (a bool; default: false)
+                    push_func ** (a function q, o -> None; default: appendleft)
+            retval: None (a NoneType)
+                    nice (a priority; the priority that obj ended up with)
+            raises: KeyError if nice is not a key in self._pool (that is, it
+                        is not one of the priority class' entries)
+            purity: relative
 
-        while not self._can_push(nice) and (nice >= priority.undef):
+            Add a new entry to the pool, with the maximum priority of nice.
+            The entry may end up with a lower priority because all the other
+                deques were full.
+
+            obj can be pushed to the top (right side) of a deque by specifying
+                push_func like (lambda q, o: q.append(o)).
+
+            If force is false, this method is not destructive; it will try to
+                push on a deque in the pool which is not full.
+            To force pushing an object into a specific priority even if they
+                are full, set force=True.
+        '''
+        if nice is None:
+            nice = self.prty.normal
+        if force or self._can_push(nice):
+            return push_func(self._pool[nice], obj), nice
+
+        # start from the highest priority and go down
+        while not self._can_push(nice) and (nice >= self.prty.undef):
+            time.sleep(0)
             nice -= 1
-        push_func(self.pool[nice], obj)
-        return nice
+        return push_func(self._pool[nice], obj), nice
 
-    def pop(self):
-        return self.pop_nice()
-
-    def pop_nice(
-        self,
-        nice_sorter=default_nice_sorter,
-        pop_func=lambda q: q.pop()
+    def pop(
+        self, random=False, force_nice=(False, None),
+        nice_sorter=default_nice_sorter, pop_func=lambda q: q.pop()
     ):
-        nices = self.sort_pool(nice_sorter)
-        for ni in nices:
-            dq = self.pool[ni]
+        '''
+        params: random ** (a bool; default: False)
+                force_nice ** (a pair<bool, priority>; default: (Force, None))
+        '''
+        if random:
+            import random
+            return self._sort_pool( lambda x: random.sample(x, len(x)) )
+
+        if force_nice[0]:
+            return pop_func(self._pool[ force_nice[1] ])
+
+        nices = self._sort_pool(nice_sorter)
+        for nice in nices:
+            dq = self._pool[nice]
             if len(dq):
-                return pop_func(dq)
-        return None
+                return pop_func(dq), nice
+        return None, None
 
-    def sort_pool(self, nice_sorter=default_nice_sorter):
-        return nice_sorter( self.pool.keys() )
+    def peek(
+        self, force_nice=(False, None),
+        nice_sorter=default_nice_sorter, peek_func=lambda q: q[len(q) - 1]
+    ):
+        if force_nice[0]:
+            return peek_func(self._pool[ force_nice[1] ])
+        return self.pop(nice_sorter=nice_sorter, pop_func=peek_func)
 
-    def pop_random(self):
-        import random
-        return self.sort_pool( lambda x: random.sample(x, len(x)) )
+    def _sort_pool(self, nice_sorter=default_nice_sorter):
+        return nice_sorter( self._pool.keys() )
 
     def _can_push(self, nice):
-        if None is not self.pool[nice].maxlen:
-            return len( self.pool[nice] ) < self.pool[nice].maxlen
-        return True
+        if self._pool[nice].maxlen is None:
+            return True
+        return len( self._pool[nice] ) < self._pool[nice].maxlen
+
+    def __repr__(self):
+        return repr(self._pool)
 
 
 class request_clerk():
@@ -141,8 +210,8 @@ class request_clerk():
         '''
             Base class for request pool management objects.
         '''
-        # read and write request pool (list?)
-        self._requests  = deque_pool()
+        # read and write request pool
+        self._requests  = priority_deque()
         # impl detail, temp record of recent uuids
         self._known_uuids = set()
         # used only by read subclass; dict: uuid -> data
@@ -167,11 +236,10 @@ class request_clerk():
             req[uuid] is registered as a known uuid.
             req is pushed to the end of the request pool based on its rank
         '''
-        # TODO: rank
-        req = prefunc(req)
-        rank = req.get("rank", req.get("nice", 20))
+        req  = prefunc(req)
+        nice = priority(req.get("nice", priority.undef))
         self._known_uuids.add( req["uuid"] )
-        self._requests.append_left_ranked(req, rank)
+        self._requests.push(reqnice=nice)
 
 # post-work (epilogue)
 
@@ -231,11 +299,6 @@ class request_clerk():
         # top (right side) of the deque
         return self._requests.pop(), microtime()
 
-# arbiter impl
-
-    def a(self):
-        pass
-
 # arbiter epilogue
 
     def impl_set_descr(self, descr):
@@ -252,8 +315,11 @@ class write_clerk(request_clerk):
 
 # user API
 
-    def register_write(self, req):
-        self.impl_register_request(req)  # stub
+    def register_write(self, req, prefunc=lambda x: x):
+        return self.impl_register_request(req)  # stub
+
+    def get_status(self, uuid):
+        return self.impl_get_descr(uuid)
 
 
 class read_clerk(request_clerk):
@@ -263,8 +329,11 @@ class read_clerk(request_clerk):
 
 # user API
 
-    def register_read(self, req):
-        self.impl_register_request(req)  # stub
+    def register_read(self, req, prefunc=lambda x: x):
+        return self.impl_register_request(req)  # stub
 
     def get_response(self, uuid):
-        self._impl_get_response(uuid)
+        return self.impl_get_response(uuid)
+
+    def get_status(self, uuid):
+        return self.impl_get_descr(uuid)
