@@ -167,7 +167,7 @@ class request_clerk():
             self.impl_set_descr(descr)
             return res, descr
 
-    def do_serve_request(self, func=lambda k: k["dbname"], spin=False):
+    def do_serve_request(self, func=lambda k: (k["request"]["dbname"], 200), spin=False, keep=False):
         data, iat = self.impl_pop_request(spin=spin)
         req, nice = data
         all_metadata = {
@@ -188,8 +188,8 @@ class write_clerk(request_clerk):
     def register_write(self, req, prefunc=lambda x: x):
         return self.impl_register_request(req, prefunc=prefunc)  # stub
 
-    def get_status(self, uuid):
-        return self.impl_get_descr(uuid)
+    def get_status(self, uuid, **kwargs):
+        return self.impl_get_descr(uuid, **kwargs)
 
 
 class read_clerk(request_clerk):
@@ -202,8 +202,8 @@ class read_clerk(request_clerk):
     def register_read(self, req, prefunc=lambda x: x):
         return self.impl_register_request(req, prefunc=prefunc)  # stub
 
-    def get_response(self, uuid):
-        return self.impl_get_response(uuid)
+    def get_response(self, uuid, **kwargs):
+        return self.impl_get_response(uuid, **kwargs)
 
-    def get_status(self, uuid):
-        return self.impl_get_descr(uuid)
+    def get_status(self, uuid, **kwargs):
+        return self.impl_get_descr(uuid, **kwargs)

@@ -33,6 +33,7 @@ class TestClerks(unittest.TestCase):
             "dbname": "users"
         })
         r.do_serve_request()
+        print(r.get_response(key, keep=True))
         self.assertTrue(r.get_response(key) == "users")
         self.assertTrue(r.get_status(key)["uuid"] == key)
         self.assertFalse(any(r.have_waiting()))
