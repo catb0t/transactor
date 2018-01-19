@@ -28,14 +28,14 @@ class TestClerks(unittest.TestCase):
         r = transactor.read_clerk()
         key = "cat"
         r.register_read({
-            "uuid": key,
-            "nice": transactor.priority.normal,
-            "dbname": "users"
+            ~r.fields.uuid: key,
+            ~r.fields.nice: transactor.priority.normal,
+            ~r.fields.default_get: "users"
         })
         r.do_serve_request()
         print(r.get_response(key, keep=True))
         self.assertTrue(r.get_response(key) == "users")
-        self.assertTrue(r.get_status(key)["uuid"] == key)
+        self.assertTrue(r.get_status(key)[~r.fields.uuid] == key)
         self.assertFalse(any(r.have_waiting()))
 
 

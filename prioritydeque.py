@@ -127,7 +127,7 @@ class priority_deque():
         # start from the highest priority and go down
         nices = range(want_nice, priority.min()[0])
         for nice in nices:
-            # now nice != want_nice
+            # nice != want_nice
             time.sleep(0)
             if self._can_push(nice):
                     with self.lock:

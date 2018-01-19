@@ -1,4 +1,5 @@
 import time
+import enum
 from prioritydeque import priority_deque, priority
 
 
@@ -17,20 +18,39 @@ class request_clerk():
         Base class for request pool management objects.
     '''
 
+    @enum.unique
+    class _field(enum.Enum):
+        request, nice, uuid, status, time, issued, start, end, default_get, \
+            STOP_ITERATION = range(10)
+
+        def describe(self):
+            return "dbname" if self.name == "default_get" else self.name
+
+        def __repr__(self):
+            return self.describe()
+
+        def __str__(self):
+            return self.describe()
+
+        def __invert__(self):
+            return self.describe()
+
     def __init__(self, *args, **kwargs):
         '''
             Create a new request pool manager.
         '''
         import threading
         # read and write request pool
-        self._requests    = priority_deque()
+        self._requests  = priority_deque()
         # impl detail, temp record of recent uuids
         self._known_uuids = set()
         # used only by read subclass; dict: uuid -> data
-        self._responses   = dict()
+        self._responses = dict()
         # descriptions; dict: uuid -> rank, ok?, completed time
-        self._descrs      = dict()
-        self.lock         = threading.Lock()
+        self._descrs    = dict()
+        self.lock       = threading.Lock()
+        self.fields     = kwargs.get("field_enum", self._field)
+
 # "public" API
 
 # pre-work (introduction)
@@ -48,9 +68,9 @@ class request_clerk():
             req is pushed to the end of the request pool based on its rank
         '''
         req  = prefunc(req)
-        nice = priority(req.get("nice", priority.undef))
+        nice = priority(req.get(~self.fields.nice, priority.undef))
         with self.lock:
-            self._known_uuids.add( req["uuid"] )
+            self._known_uuids.add( req[~self.fields.uuid] )
             return self._requests.push(req, want_nice=nice)
 
 # post-work (epilogue)
@@ -127,7 +147,7 @@ class request_clerk():
 
     def impl_set_descr(self, descr):
         with self.lock:
-            self._descrs[ descr["uuid"] ] = descr
+            self._descrs[ descr[~self.fields.uuid] ] = descr
 
     def impl_set_response(self, uuid, data):
         with self.lock:
@@ -138,11 +158,11 @@ class request_clerk():
     def impl_do_serve_request(self, metadata, func):
         if (
             metadata is None
-            or "request" not in metadata
-            or metadata["request"] is None
+            or ~self.fields.request not in metadata
+            or metadata[~self.fields.request] is None
         ):
             return None, None
-        uuid = metadata["request"].get("uuid", None)
+        uuid = metadata[~self.fields.request][~self.fields.uuid]
         time.sleep(0)
         # do something with req
         start = microtime()
@@ -156,24 +176,27 @@ class request_clerk():
             end = microtime()
             self.impl_set_response(uuid, res)
             descr = {
-                "uuid": uuid,
-                "status": status,
-                "time": {
-                  "issued": metadata["issued"],
-                  "start": start,
-                  "end":   end,
+                ~self.fields.uuid: uuid,
+                ~self.fields.status: status,
+                ~self.fields.time: {
+                  ~self.fields.issued: metadata[~self.fields.issued],
+                  ~self.fields.start: start,
+                  ~self.fields.end:   end,
                 }
             }
             self.impl_set_descr(descr)
             return res, descr
 
-    def do_serve_request(self, func=lambda k: (k["request"]["dbname"], 200), spin=False, keep=False):
+    def do_serve_request(
+        self, spin=False, keep=False,
+        func=lambda k: (k[~request_clerk._field.request][~request_clerk._field.default_get], 200) # noqa
+    ):
         data, iat = self.impl_pop_request(spin=spin)
         req, nice = data
         all_metadata = {
-          "request": req,
-          "nice": nice,
-          "issued": iat
+          ~self.fields.request: req,
+          ~self.fields.nice: nice,
+          ~self.fields.issued: iat
         }
         return self.impl_do_serve_request(all_metadata, func)
 
