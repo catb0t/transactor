@@ -8,22 +8,37 @@ R = transactor.read_clerk()
 
 
 def client():
-    for i in range(11):
-        key = transactor.random_key(20)
+    import random
+    keys = ()
+    for i in range(8):
+        keys += transactor.random_key(10),
+        nice = random.choice(list(transactor.priority))
         R.register_read({
-          "uuid": key,
-          "nice": transactor.priority.normal,
-          "dbname": "users"
+          "uuid": keys[i],
+          "nice": nice,
+          "dbname": "users",
+          "STOP_ITERATION": "STOPITER"
+                            if nice < transactor.priority.normal
+                            else "continue"
         })
-        time.sleep(.1)
-        print(R.get_response(key), R.get_status(key))
+        time.sleep(0)
+    time.sleep(.5)
+    # come back later
+    for key in keys:
+        print(R.get_response(key), "\t", R.get_status(key))
 
 
 def server():
     i = 0
     while i < 10 or R.have_waiting()[0]:
         time.sleep(.01)
-        R.do_serve_request(spin=True)
+
+        def arbiter(x):
+            print(x["request"]["nice"])
+            return (x["request"]["STOP_ITERATION"], x["request"]["nice"]), 200
+        res = R.do_serve_request(spin=True, func=arbiter)
+        if "STOPITER" == res[0]:
+            break
         i += 1
 
 

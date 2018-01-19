@@ -55,19 +55,21 @@ class request_clerk():
 
 # post-work (epilogue)
 
-    def impl_ul_get_descr(self, uuid):
+    def impl_ul_get_descr(self, uuid, keep=False):
         res = self._descrs.get(uuid, None)
 
         if res is None:
             return None
+        if keep:
+            return res
         with self.lock:
             del self._descrs[uuid]
         return res
 
-    def impl_get_descr(self, uuid, spin=False):
+    def impl_get_descr(self, uuid, spin=False, keep=False):
         if not self.impl_have_own_uuid(uuid):
             return False
-        descr = self.impl_ul_get_descr(uuid)
+        descr = self.impl_ul_get_descr(uuid, keep=keep)
         if descr is not None:
             return descr
         if descr is None and not spin:
@@ -75,23 +77,25 @@ class request_clerk():
 
         while descr is None:
             time.sleep(0)  # yield on this thread
-            descr = self.impl_ul_get_descr(uuid)
+            descr = self.impl_ul_get_descr(uuid, keep=keep)
         return descr
 
-    def impl_ul_get_response(self, uuid):
+    def impl_ul_get_response(self, uuid, keep=False):
         resp = self._responses.get(uuid, None)
 
         if resp is None:
             return None
+        if keep:
+            return resp
         with self.lock:
             del self._responses[uuid]
         return resp
 
-    def impl_get_response(self, uuid, spin=False):
+    def impl_get_response(self, uuid, spin=False, keep=False):
         if not self.impl_have_own_uuid(uuid):
             return False
 
-        resp = self.impl_ul_get_response(uuid)
+        resp = self.impl_ul_get_response(uuid, keep=keep)
         if resp is not None:
             return resp
         if resp is None and not spin:
@@ -99,7 +103,7 @@ class request_clerk():
 
         while resp is None:
             time.sleep(0)
-            resp = self.impl_ul_get_response()
+            resp = self.impl_ul_get_response(keep=keep)
         return resp
 
 # "background" API
@@ -109,9 +113,12 @@ class request_clerk():
 
 # arbiter introduction
 
-    def impl_pop_request(self):
+    def impl_pop_request(self, spin=False, keep=False):
         # top (right side) of the deque
-        return self._requests.pop(), microtime()
+        now = microtime()
+        reqfun = self._requests.__getattribute__( ("pop", "peek")[keep] )
+        req = reqfun()
+        return req, now
 
     def have_waiting(self):
         return self._requests.peek()
@@ -128,25 +135,47 @@ class request_clerk():
 
 # arbiter stub
 
-    def impl_do_serve_request(self, req, iat, func):
-        uuid = req["uuid"]
+    def impl_do_serve_request(self, metadata, func):
+        if (
+            metadata is None
+            or "request" not in metadata
+            or metadata["request"] is None
+        ):
+            return None, None
+        uuid = metadata["request"].get("uuid", None)
         time.sleep(0)
         # do something with req
-        res = func(req)
-        self.impl_set_response(uuid, res)
-        self.impl_set_descr( {"uuid": uuid, "status": 200, "time": iat} )
+        start = microtime()
+        res = {}
+        status = 0
+        try:
+            res, status = func(metadata)
+        except BaseException as e:
+            res, status = e, -1
+        finally:
+            end = microtime()
+            self.impl_set_response(uuid, res)
+            descr = {
+                "uuid": uuid,
+                "status": status,
+                "time": {
+                  "issued": metadata["issued"],
+                  "start": start,
+                  "end":   end,
+                }
+            }
+            self.impl_set_descr(descr)
+            return res, descr
 
     def do_serve_request(self, func=lambda k: k["dbname"], spin=False):
-        md, iat = self.impl_pop_request()
-        req, nice = md
-        if req is None:
-            if not spin:
-                return None
-            while req is None:
-                time.sleep(0)
-                md, iat = self.impl_pop_request()
-                req, nice = md
-        self.impl_do_serve_request(req, iat, func)
+        data, iat = self.impl_pop_request(spin=spin)
+        req, nice = data
+        all_metadata = {
+          "request": req,
+          "nice": nice,
+          "issued": iat
+        }
+        return self.impl_do_serve_request(all_metadata, func)
 
 
 class write_clerk(request_clerk):
