@@ -19,12 +19,12 @@ def client(key):
 
 def server(key):
     i = 0
-    while i < 10 or R.impl_have_waiting()[0]:
+    while i < 10 or R.have_waiting()[0]:
         time.sleep(0)
         R.do_serve_request(spin=True)
         print(R.get_status(key))
         print(R.get_response(key))
-        print(R.impl_have_waiting())
+        print(R.have_waiting())
         i += 1
 
 

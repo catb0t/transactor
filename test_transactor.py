@@ -2,8 +2,8 @@
 import unittest
 import unittest_sorter
 import transactor
-import time
-from transactor import priority_deque, priority
+# import time
+from prioritydeque import priority_deque, priority
 
 
 class TestPriorityDeque(unittest.TestCase):
@@ -33,6 +33,6 @@ class TestClerks(unittest.TestCase):
             "dbname": "users"
         })
         r.do_serve_request()
-        
+
 
 unittest_sorter.main(scope=globals().copy())
