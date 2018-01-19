@@ -14,7 +14,7 @@ class TestPriorityDeque(unittest.TestCase):
     def test_pushpop(self):
         dq = priority_deque()
         for p in priority:
-            dq.push(p, nice=p)
+            dq.push(p, want_nice=p)
             self.assertTrue( p == dq.peek( force_nice=(True, p) )[1] )
         self.assertTrue(repr(dq) == "{<priority.undef: -1>: deque([<priority.undef: -1>]), <priority.low: 0>: deque([<priority.low: 0>]), <priority.normal: 1>: deque([<priority.normal: 1>]), <priority.high: 2>: deque([<priority.high: 2>], maxlen=50), <priority.airmail: 3>: deque([<priority.airmail: 3>], maxlen=10)}") # noqa
 
@@ -33,6 +33,9 @@ class TestClerks(unittest.TestCase):
             "dbname": "users"
         })
         r.do_serve_request()
+        self.assertTrue(r.get_response(key) == "users")
+        self.assertTrue(r.get_status(key)["uuid"] == key)
+        self.assertFalse(any(r.have_waiting()))
 
 
 unittest_sorter.main(scope=globals().copy())

@@ -51,7 +51,7 @@ class request_clerk():
         nice = priority(req.get("nice", priority.undef))
         with self.lock:
             self._known_uuids.add( req["uuid"] )
-            return self._requests.push(req, nice=nice)
+            return self._requests.push(req, want_nice=nice)
 
 # post-work (epilogue)
 
