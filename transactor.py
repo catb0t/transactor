@@ -14,9 +14,9 @@ def microtime():
 
 
 class request_clerk():
-    '''
+    """
         Base class for request pool management objects.
-    '''
+    """
 
     @enum.unique
     class _field(enum.Enum):
@@ -36,9 +36,9 @@ class request_clerk():
             return self.describe()
 
     def __init__(self, *args, **kwargs):
-        '''
+        """
             Create a new request pool manager.
-        '''
+        """
         import threading
         # read and write request pool
         self._requests  = priority_deque()
@@ -56,7 +56,7 @@ class request_clerk():
 # pre-work (introduction)
 
     def impl_register_request(self, req, prefunc=lambda x: x):
-        '''
+        """
             params: req (a dict) and prefunc (a function x -> g)
             retval: None
             raises: KeyError if req is missing "uuid" or "nice" keys
@@ -66,7 +66,7 @@ class request_clerk():
 
             req[uuid] is registered as a known uuid.
             req is pushed to the end of the request pool based on its rank
-        '''
+        """
         req  = prefunc(req)
         nice = priority(req.get(~self.fields.nice, priority.undef))
         with self.lock:
@@ -156,6 +156,7 @@ class request_clerk():
 # arbiter stub
 
     def impl_do_serve_request(self, metadata, func):
+
         if (
             metadata is None
             or ~self.fields.request not in metadata
@@ -187,10 +188,14 @@ class request_clerk():
             self.impl_set_descr(descr)
             return res, descr
 
-    def do_serve_request(
-        self, spin=False, keep=False,
-        func=lambda k: (k[~request_clerk._field.request][~request_clerk._field.default_get], 200) # noqa
-    ):
+    def do_serve_request(self, spin=False, keep=False, func=None):
+        if func is None:
+            def func(k):
+                return (
+                    k[~request_clerk._field.request]
+                     [~request_clerk._field.default_get],
+                    200
+                )
         data, iat = self.impl_pop_request(spin=spin)
         req, nice = data
         all_metadata = {
