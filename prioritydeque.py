@@ -37,9 +37,9 @@ def get_maxlen(params, key):
 
 
 class priority_deque():
-    '''
+    """
         Base class for priority deque objects.
-    '''
+    """
 
     @staticmethod
     def default_nice_sorter(nices):
@@ -51,7 +51,7 @@ class priority_deque():
         return random.shuffle(nices, len(nices))
 
     def __init__(self, *args, **kwargs):
-        '''
+        """
             params: priority_enum ** (an alternative enum class with the same
                         member names as the priority class)
             retval: a blank priority_deque
@@ -60,7 +60,7 @@ class priority_deque():
             purity: yes
 
             Create an empty priority deque.
-        '''
+        """
         import threading
         from collections import deque
         self.prty = priority
@@ -85,7 +85,7 @@ class priority_deque():
         want_push_func=lambda q, o: q.appendleft(o),
         settle_push_func=lambda q, o: q.append(o)
     ):
-        '''
+        """
             params: obj (an object)
                     want_nice ** (a priority; default: self.prty.normal)
                     force ** (a bool; default: false)
@@ -115,7 +115,7 @@ class priority_deque():
                 push on a deque in the pool which is not full.
             To force pushing an object into a specific priority even if they
                 are full, set force=True.
-        '''
+        """
         import time
         if want_nice is None:
             want_nice = self.prty.normal
@@ -137,7 +137,7 @@ class priority_deque():
         self, force_nice=(False, None),
         nice_sorter=None, pop_func=lambda q: q.pop()
     ):
-        '''
+        """
             params: force_nice ** (a pair<bool, priority>;
                         default: (Force, None))
                     nice_sorter ** (a function n -> s;
@@ -163,7 +163,7 @@ class priority_deque():
             To pop from a specific priority, use force_nice=(True, nice).
             This will return an object or None (if the priority was empty) and
                 the provided priority.
-        '''
+        """
         import time
         if nice_sorter is None:
             nice_sorter = self.default_nice_sorter
@@ -185,7 +185,7 @@ class priority_deque():
         self, force_nice=(False, None),
         nice_sorter=None, peek_func=lambda q: q[-1]
     ):
-        '''
+        """
             params: force_nice ** (a pair<bool, priority>;
                         default: (Force, None))
                     nice_sorter ** (a function n -> s;
@@ -199,7 +199,7 @@ class priority_deque():
             purity: relative
 
             View an entry in the pool.
-        '''
+        """
         if nice_sorter is None:
             nice_sorter = self.default_nice_sorter
         if force_nice[0]:
