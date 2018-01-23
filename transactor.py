@@ -1,6 +1,6 @@
 import time
 import enum
-from prioritydeque import priority_deque, priority
+from .prioritydeque import priority_deque, priority
 
 
 def random_key(keysize=64):
