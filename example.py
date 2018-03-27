@@ -10,7 +10,7 @@ R = transactor.read_clerk()
 def client():
     import random
     keys = ()
-    for i in range(8):
+    for i in range(1000):
         keys += transactor.random_key(10),
         nice = random.choice(list(transactor.priority))
         R.register_read({
@@ -22,7 +22,7 @@ def client():
                                     else "continue"
         })
         time.sleep(0)
-    time.sleep(.5)
+    time.sleep(15)
     # come back later
     for key in keys:
         print(R.get_response(key), "\t", R.get_status(key))
