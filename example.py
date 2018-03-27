@@ -14,12 +14,11 @@ def client():
         keys += transactor.random_key(10),
         nice = random.choice(list(transactor.priority))
         R.register_read({
-          ~R.fields.uuid: keys[i],
-          ~R.fields.nice: nice,
-          ~R.fields.default_get: "users",
-          ~R.fields.STOP_ITERATION: "STOPITER"
-                                    if nice < transactor.priority.low
-                                    else "continue"
+            ~R.fields.uuid: keys[i],
+            ~R.fields.nice: nice,
+            ~R.fields.default_get: "users",
+            ~R.fields.STOP_ITERATION: "STOPITER"
+                if nice < transactor.priority.low else "continue"  # noqa
         })
         time.sleep(0)
     time.sleep(15)
