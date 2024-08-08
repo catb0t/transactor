@@ -2,6 +2,8 @@
 
 ---
 
+https://github.com/catb0t/transactor
+
 simple transactional scheduler and prioritising double ended queue for Python3
 
 intended for threading applications but can be used in single-thread applications too
